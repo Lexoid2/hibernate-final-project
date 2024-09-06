@@ -1,5 +1,6 @@
 package com.javarush.kostenko;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.javarush.kostenko.dao.CityDAO;
 import com.javarush.kostenko.dao.CountryDAO;
@@ -11,6 +12,7 @@ import com.javarush.kostenko.redis.Language;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.api.sync.RedisStringCommands;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
@@ -45,6 +47,7 @@ public class Main {
     public static void main(String[] args) {
         Main main = new Main();
         List<City> allCities = main.fetchData(main);
+        main.pushToRedis(main.transformData(allCities));
         main.shutdown();
     }
 
@@ -83,6 +86,20 @@ public class Main {
         }
         if (nonNull(redisClient)) {
             redisClient.shutdown();
+        }
+    }
+
+    private void pushToRedis(List<CityCountry> data) {
+        try (StatefulRedisConnection<String, String> connection = redisClient.connect()) {
+            RedisStringCommands<String, String> sync = connection.sync();
+            for (CityCountry cityCountry : data) {
+                try {
+                    sync.set(String.valueOf(cityCountry.getId()), mapper.writeValueAsString(cityCountry));
+                } catch (JsonProcessingException e) {
+                    e.printStackTrace();
+                }
+            }
+
         }
     }
 
